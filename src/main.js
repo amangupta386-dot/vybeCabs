@@ -1,23 +1,25 @@
 'use strict';
+
 require('reflect-metadata');
+
 const express = require('express');
 const path = require('path');
 const { createPool } = require('./models/database');
 const { createRedis } = require('./models/redis');
-const { DriversService } = require('./services/drivers.service');
-const { RidesService } = require('./services/rides.service');
-const { AppController } = require('./controllers/app.controller');
-const { DriversController } = require('./controllers/drivers.controller');
-const { RidesController } = require('./controllers/rides.controller');
+const { createDriversService } = require('./services/drivers.service');
+const { createRidesService } = require('./services/rides.service');
+const { createAppController } = require('./controllers/app.controller');
+const { createDriversController } = require('./controllers/drivers.controller');
+const { createRidesController } = require('./controllers/rides.controller');
 const { registerRoutes } = require('./routes');
 const { httpErrorHandler } = require('./middlewares/http-error.middleware');
 
 function createApp(pool, redis) {
-  const driversService = new DriversService(pool, redis);
-  const ridesService = new RidesService(pool, redis);
-  const appController = new AppController();
-  const driversController = new DriversController(driversService);
-  const ridesController = new RidesController(ridesService);
+  const driversService = createDriversService(pool, redis);
+  const ridesService = createRidesService(pool, redis);
+  const appController = createAppController();
+  const driversController = createDriversController(driversService);
+  const ridesController = createRidesController(ridesService);
 
   const app = express();
   app.use(express.json());

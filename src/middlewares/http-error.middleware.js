@@ -1,12 +1,12 @@
 'use strict';
 
-const { HttpException } = require('../common/errors');
+const { isHttpError } = require('../common/errors');
 
 function httpErrorHandler(err, req, res, _next) {
   if (res.headersSent) {
     return _next(err);
   }
-  if (err instanceof HttpException) {
+  if (isHttpError(err)) {
     return res.status(err.statusCode).json({
       statusCode: err.statusCode,
       message: err.message,

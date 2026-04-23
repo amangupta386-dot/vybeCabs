@@ -1,18 +1,16 @@
 'use strict';
 
-class DriversController {
-  constructor(driversService) {
-    this.driversService = driversService;
-  }
-
-  async upsert(req, res, next) {
+function createDriversController(driversService) {
+  async function upsert(req, res, next) {
     try {
-      const driver = await this.driversService.upsert(req.body);
+      const driver = await driversService.upsert(req.body);
       res.json(driver);
     } catch (err) {
       next(err);
     }
   }
+
+  return { upsert };
 }
 
-module.exports = { DriversController };
+module.exports = { createDriversController };

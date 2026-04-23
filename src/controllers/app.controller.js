@@ -1,7 +1,7 @@
 'use strict';
 
-class AppController {
-  apiInfo(req, res) {
+function createAppController() {
+  function apiInfo(req, res) {
     res.json({
       name: 'Driver Matching System',
       status: 'running',
@@ -14,9 +14,11 @@ class AppController {
     });
   }
 
-  health(req, res) {
+  function health(req, res) {
     res.json({ status: 'ok' });
   }
+
+  return { apiInfo, health };
 }
 
-module.exports = { AppController };
+module.exports = { createAppController };

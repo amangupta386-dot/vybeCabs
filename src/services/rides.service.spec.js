@@ -1,8 +1,7 @@
 'use strict';
 
-const { ForbiddenException, ConflictException } = require('../common/errors');
+const { createRidesService } = require('./rides.service');
 const { AVAILABLE_DRIVERS_KEY } = require('./drivers.service');
-const { RidesService } = require('./rides.service');
 
 describe('RidesService race handling', () => {
   const pool = {
@@ -16,23 +15,29 @@ describe('RidesService race handling', () => {
     sadd: jest.fn(),
   };
 
-  let service;
+  let ridesService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new RidesService(pool, redis);
+    ridesService = createRidesService(pool, redis);
   });
 
   it('rejects a driver that was not one of the three offered drivers', async () => {
     redis.eval.mockResolvedValue('NOT_OFFERED');
 
-    await expect(service.acceptRide('ride-1', 'driver-1')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(ridesService.acceptRide('ride-1', 'driver-1')).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'Driver was not offered this ride.',
+    });
   });
 
   it('rejects late accepts after Redis has atomically assigned the ride', async () => {
     redis.eval.mockResolvedValue('ALREADY_ASSIGNED');
 
-    await expect(service.acceptRide('ride-1', 'driver-2')).rejects.toBeInstanceOf(ConflictException);
+    await expect(ridesService.acceptRide('ride-1', 'driver-2')).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Ride has already been assigned.',
+    });
   });
 
   it('persists only the Redis winner with a guarded SQL update', async () => {
@@ -52,7 +57,7 @@ describe('RidesService race handling', () => {
     pool.connect.mockResolvedValue(client);
     redis.eval.mockResolvedValue('ACCEPTED');
 
-    await expect(service.acceptRide('ride-1', 'driver-1')).resolves.toEqual({
+    await expect(ridesService.acceptRide('ride-1', 'driver-1')).resolves.toEqual({
       id: 'ride-1',
       status: 'ASSIGNED',
       assigned_driver_id: 'driver-1',

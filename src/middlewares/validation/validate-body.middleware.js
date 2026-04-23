@@ -5,7 +5,7 @@ require('reflect-metadata');
 
 const { plainToInstance } = require('class-transformer');
 const { validate } = require('class-validator');
-const { BadRequestException } = require('../../common/errors');
+const { badRequest } = require('../../common/errors');
 
 function formatValidationErrors(errors) {
   const messages = [];
@@ -35,7 +35,7 @@ function validateBody(DtoClass) {
       });
       if (errors.length > 0) {
         const message = formatValidationErrors(errors).join('; ') || 'Validation failed';
-        throw new BadRequestException(message);
+        throw badRequest(message);
       }
       req.body = instance;
       next();

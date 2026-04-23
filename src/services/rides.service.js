@@ -1,6 +1,6 @@
 'use strict';
 
-const { ForbiddenException, ConflictException, NotFoundException } = require('../common/errors');
+const { forbidden, conflict, notFound } = require('../common/errors');
 const { AVAILABLE_DRIVERS_KEY, DRIVER_GEO_KEY } = require('./drivers.service');
 
 const OFFER_KEY_PREFIX = 'ride:offers:';
@@ -28,90 +28,18 @@ end
 return 'ALREADY_ASSIGNED'
 `;
 
-class RidesService {
-  constructor(pool, redis) {
-    this.pool = pool;
-    this.redis = redis;
+function createRidesService(pool, redis) {
+  function offerKey(rideId) {
+    return `${OFFER_KEY_PREFIX}${rideId}`;
   }
 
-  async requestRide(dto) {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const rideResult = await client.query(
-        `
-        INSERT INTO rides (rider_id, pickup_latitude, pickup_longitude, status)
-        VALUES ($1, $2, $3, 'REQUESTED')
-        RETURNING id, rider_id, pickup_latitude, pickup_longitude, status
-        `,
-        [dto.riderId, dto.pickupLatitude, dto.pickupLongitude],
-      );
-      const ride = rideResult.rows[0];
-      const candidates = await this.findNearestAvailableDrivers(dto.pickupLongitude, dto.pickupLatitude);
-      const enrichedCandidates = await this.enrichDriverCandidates(client, candidates);
-      await Promise.all(
-        enrichedCandidates.map((candidate) =>
-          client.query(
-            `
-            INSERT INTO ride_driver_offers (ride_id, driver_id, distance_km, status)
-            VALUES ($1, $2, $3, 'PENDING')
-            `,
-            [ride.id, candidate.driverId, candidate.distanceKm],
-          ),
-        ),
-      );
-      await client.query('COMMIT');
-      await this.cacheOffers(ride.id, enrichedCandidates);
-      await this.notifyDrivers(ride.id, enrichedCandidates);
-      return {
-        ride,
-        notifiedDrivers: enrichedCandidates,
-      };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+  function assignmentKey(rideId) {
+    return `${ASSIGNMENT_KEY_PREFIX}${rideId}`;
   }
 
-  async acceptRide(rideId, driverId) {
-    const redisDecision = await this.redis.eval(
-      acceptRideLua,
-      3,
-      this.offerKey(rideId),
-      this.assignmentKey(rideId),
-      AVAILABLE_DRIVERS_KEY,
-      driverId,
-    );
-    if (redisDecision === 'NOT_OFFERED') {
-      throw new ForbiddenException('Driver was not offered this ride.');
-    }
-    if (redisDecision === 'NOT_AVAILABLE') {
-      throw new ConflictException('Driver is no longer available.');
-    }
-    if (redisDecision === 'ALREADY_ASSIGNED') {
-      throw new ConflictException('Ride has already been assigned.');
-    }
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const assigned = await this.persistAssignment(client, rideId, driverId);
-      await client.query('COMMIT');
-      return assigned;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      await this.redis.del(this.assignmentKey(rideId));
-      await this.redis.sadd(AVAILABLE_DRIVERS_KEY, driverId);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  async findNearestAvailableDrivers(longitude, latitude) {
+  async function findNearestAvailableDrivers(longitude, latitude) {
     const radiusKm = Number(process.env.MATCH_RADIUS_KM ?? 10);
-    const raw = await this.redis.call(
+    const raw = await redis.call(
       'GEOSEARCH',
       DRIVER_GEO_KEY,
       'FROMLONLAT',
@@ -127,7 +55,7 @@ class RidesService {
     );
     const candidates = [];
     for (const [driverId, distance] of raw) {
-      const isAvailable = await this.redis.sismember(AVAILABLE_DRIVERS_KEY, driverId);
+      const isAvailable = await redis.sismember(AVAILABLE_DRIVERS_KEY, driverId);
       if (isAvailable) {
         candidates.push({ driverId, distanceKm: Number(distance) });
       }
@@ -135,7 +63,7 @@ class RidesService {
     return candidates;
   }
 
-  async enrichDriverCandidates(client, candidates) {
+  async function enrichDriverCandidates(client, candidates) {
     if (candidates.length === 0) {
       return [];
     }
@@ -167,21 +95,21 @@ class RidesService {
       .slice(0, 3);
   }
 
-  async cacheOffers(rideId, candidates) {
+  async function cacheOffers(rideId, candidates) {
     if (candidates.length === 0) {
       return;
     }
-    await this.redis
+    await redis
       .multi()
-      .sadd(this.offerKey(rideId), ...candidates.map((candidate) => candidate.driverId))
-      .expire(this.offerKey(rideId), 300)
+      .sadd(offerKey(rideId), ...candidates.map((candidate) => candidate.driverId))
+      .expire(offerKey(rideId), 300)
       .exec();
   }
 
-  async notifyDrivers(rideId, candidates) {
+  async function notifyDrivers(rideId, candidates) {
     await Promise.all(
       candidates.map((candidate) =>
-        this.pool.query(
+        pool.query(
           `
           INSERT INTO driver_notifications (ride_id, driver_id, channel, payload)
           VALUES ($1, $2, 'IN_APP', $3)
@@ -202,7 +130,7 @@ class RidesService {
     );
   }
 
-  async persistAssignment(client, rideId, driverId) {
+  async function persistAssignment(client, rideId, driverId) {
     const rideResult = await client.query(
       `
       UPDATE rides
@@ -215,9 +143,9 @@ class RidesService {
     if (rideResult.rowCount === 0) {
       const existingRide = await client.query(`SELECT id FROM rides WHERE id = $1`, [rideId]);
       if (existingRide.rowCount === 0) {
-        throw new NotFoundException('Ride not found.');
+        throw notFound('Ride not found.');
       }
-      throw new ConflictException('Ride has already been assigned.');
+      throw conflict('Ride has already been assigned.');
     }
     await client.query(
       `
@@ -232,13 +160,82 @@ class RidesService {
     return rideResult.rows[0];
   }
 
-  offerKey(rideId) {
-    return `${OFFER_KEY_PREFIX}${rideId}`;
+  async function requestRide(dto) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const rideResult = await client.query(
+        `
+        INSERT INTO rides (rider_id, pickup_latitude, pickup_longitude, status)
+        VALUES ($1, $2, $3, 'REQUESTED')
+        RETURNING id, rider_id, pickup_latitude, pickup_longitude, status
+        `,
+        [dto.riderId, dto.pickupLatitude, dto.pickupLongitude],
+      );
+      const ride = rideResult.rows[0];
+      const candidates = await findNearestAvailableDrivers(dto.pickupLongitude, dto.pickupLatitude);
+      const enrichedCandidates = await enrichDriverCandidates(client, candidates);
+      await Promise.all(
+        enrichedCandidates.map((candidate) =>
+          client.query(
+            `
+            INSERT INTO ride_driver_offers (ride_id, driver_id, distance_km, status)
+            VALUES ($1, $2, $3, 'PENDING')
+            `,
+            [ride.id, candidate.driverId, candidate.distanceKm],
+          ),
+        ),
+      );
+      await client.query('COMMIT');
+      await cacheOffers(ride.id, enrichedCandidates);
+      await notifyDrivers(ride.id, enrichedCandidates);
+      return {
+        ride,
+        notifiedDrivers: enrichedCandidates,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
-  assignmentKey(rideId) {
-    return `${ASSIGNMENT_KEY_PREFIX}${rideId}`;
+  async function acceptRide(rideId, driverId) {
+    const redisDecision = await redis.eval(
+      acceptRideLua,
+      3,
+      offerKey(rideId),
+      assignmentKey(rideId),
+      AVAILABLE_DRIVERS_KEY,
+      driverId,
+    );
+    if (redisDecision === 'NOT_OFFERED') {
+      throw forbidden('Driver was not offered this ride.');
+    }
+    if (redisDecision === 'NOT_AVAILABLE') {
+      throw conflict('Driver is no longer available.');
+    }
+    if (redisDecision === 'ALREADY_ASSIGNED') {
+      throw conflict('Ride has already been assigned.');
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const assigned = await persistAssignment(client, rideId, driverId);
+      await client.query('COMMIT');
+      return assigned;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      await redis.del(assignmentKey(rideId));
+      await redis.sadd(AVAILABLE_DRIVERS_KEY, driverId);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
+
+  return { requestRide, acceptRide };
 }
 
-module.exports = { RidesService };
+module.exports = { createRidesService };

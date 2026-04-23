@@ -1,48 +1,40 @@
 'use strict';
 
-class HttpException extends Error {
-  constructor(message, statusCode) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = this.constructor.name;
-  }
+function createHttpError(statusCode, message) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
 }
 
-class BadRequestException extends HttpException {
-  constructor(message = 'Bad Request') {
-    super(message, 400);
-  }
+function badRequest(message = 'Bad Request') {
+  return createHttpError(400, message);
 }
 
-class UnauthorizedException extends HttpException {
-  constructor(message = 'Unauthorized') {
-    super(message, 401);
-  }
+function unauthorized(message = 'Unauthorized') {
+  return createHttpError(401, message);
 }
 
-class ForbiddenException extends HttpException {
-  constructor(message = 'Forbidden') {
-    super(message, 403);
-  }
+function forbidden(message = 'Forbidden') {
+  return createHttpError(403, message);
 }
 
-class NotFoundException extends HttpException {
-  constructor(message = 'Not Found') {
-    super(message, 404);
-  }
+function notFound(message = 'Not Found') {
+  return createHttpError(404, message);
 }
 
-class ConflictException extends HttpException {
-  constructor(message = 'Conflict') {
-    super(message, 409);
-  }
+function conflict(message = 'Conflict') {
+  return createHttpError(409, message);
+}
+
+function isHttpError(err) {
+  return Boolean(err && Number.isInteger(err.statusCode) && err.statusCode >= 400 && err.statusCode < 600);
 }
 
 module.exports = {
-  HttpException,
-  BadRequestException,
-  UnauthorizedException,
-  ForbiddenException,
-  NotFoundException,
-  ConflictException,
+  badRequest,
+  unauthorized,
+  forbidden,
+  notFound,
+  conflict,
+  isHttpError,
 };
