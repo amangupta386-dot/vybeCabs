@@ -14,9 +14,11 @@ function httpErrorHandler(err, req, res, _next) {
   }
   // eslint-disable-next-line no-console
   console.error(err);
+  const exposeDetails =
+    process.env.NODE_ENV === 'development' || process.env.DEBUG_ERRORS === '1';
   return res.status(500).json({
     statusCode: 500,
-    message: 'Internal server error',
+    message: exposeDetails ? err.message : 'Internal server error',
   });
 }
 

@@ -1,5 +1,8 @@
 'use strict';
 
+/** Required by class-transformer / class-validator decorator metadata at runtime */
+require('reflect-metadata');
+
 const { plainToInstance } = require('class-transformer');
 const { validate } = require('class-validator');
 const { BadRequestException } = require('../../common/errors');

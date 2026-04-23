@@ -1,5 +1,5 @@
 'use strict';
-
+require('reflect-metadata');
 const express = require('express');
 const path = require('path');
 const { createPool } = require('./models/database');
