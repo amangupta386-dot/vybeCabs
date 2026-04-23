@@ -1,8 +1,7 @@
-const { ConflictException, ForbiddenException } = require('@nestjs/common');
-const { Test } = require('@nestjs/testing');
-const { PG_POOL } = require('../database/database.module');
-const { AVAILABLE_DRIVERS_KEY } = require('../drivers/drivers.service');
-const { REDIS } = require('../redis/redis.module');
+'use strict';
+
+const { ForbiddenException, ConflictException } = require('../common/errors');
+const { AVAILABLE_DRIVERS_KEY } = require('./drivers.service');
 const { RidesService } = require('./rides.service');
 
 describe('RidesService race handling', () => {
@@ -19,33 +18,21 @@ describe('RidesService race handling', () => {
 
   let service;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-    const moduleRef = await Test.createTestingModule({
-      providers: [
-        RidesService,
-        { provide: PG_POOL, useValue: pool },
-        { provide: REDIS, useValue: redis },
-      ],
-    }).compile();
-
-    service = moduleRef.get(RidesService);
+    service = new RidesService(pool, redis);
   });
 
   it('rejects a driver that was not one of the three offered drivers', async () => {
     redis.eval.mockResolvedValue('NOT_OFFERED');
 
-    await expect(service.acceptRide('ride-1', 'driver-1')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+    await expect(service.acceptRide('ride-1', 'driver-1')).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('rejects late accepts after Redis has atomically assigned the ride', async () => {
     redis.eval.mockResolvedValue('ALREADY_ASSIGNED');
 
-    await expect(service.acceptRide('ride-1', 'driver-2')).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(service.acceptRide('ride-1', 'driver-2')).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('persists only the Redis winner with a guarded SQL update', async () => {
