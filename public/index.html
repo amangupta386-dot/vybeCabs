@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver Matching System</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">Redis GEO + PostgreSQL + NestJS</p>
+          <h1>Driver Matching System</h1>
+        </div>
+        <div class="status-pill" id="healthStatus">Checking...</div>
+      </section>
+
+      <section class="layout">
+        <form class="panel" id="driverForm">
+          <div class="panel-header">
+            <h2>Add Driver</h2>
+            <span>Creates an available driver and indexes location in Redis.</span>
+          </div>
+
+          <label>
+            Name
+            <input name="name" value="Asha" required />
+          </label>
+
+          <div class="field-grid">
+            <label>
+              Latitude
+              <input name="latitude" type="number" step="0.000001" value="28.6139" required />
+            </label>
+            <label>
+              Longitude
+              <input name="longitude" type="number" step="0.000001" value="77.2090" required />
+            </label>
+          </div>
+
+          <label>
+            Status
+            <select name="status">
+              <option value="AVAILABLE">AVAILABLE</option>
+              <option value="BUSY">BUSY</option>
+              <option value="OFFLINE">OFFLINE</option>
+            </select>
+          </label>
+
+          <button type="submit">Add Driver</button>
+        </form>
+
+        <form class="panel" id="rideForm">
+          <div class="panel-header">
+            <h2>Request Ride</h2>
+            <span>Finds and notifies the three nearest available drivers.</span>
+          </div>
+
+          <label>
+            Rider ID
+            <input name="riderId" value="rider-1" required />
+          </label>
+
+          <div class="field-grid">
+            <label>
+              Pickup Latitude
+              <input name="pickupLatitude" type="number" step="0.000001" value="28.6140" required />
+            </label>
+            <label>
+              Pickup Longitude
+              <input name="pickupLongitude" type="number" step="0.000001" value="77.2100" required />
+            </label>
+          </div>
+
+          <button type="submit">Match Drivers</button>
+        </form>
+      </section>
+
+      <section class="workspace">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Drivers</h2>
+            <span id="driverCount">0 added from this screen</span>
+          </div>
+          <div class="list" id="driversList"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Ride Match</h2>
+            <span id="rideStatus">No active ride</span>
+          </div>
+          <div class="match-card" id="matchCard">
+            <p class="empty">Create at least three available drivers, then request a ride.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-header">
+          <h2>Activity</h2>
+          <span>API responses and assignment results</span>
+        </div>
+        <pre id="activityLog">Ready.</pre>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
